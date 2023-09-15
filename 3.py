@@ -36,7 +36,7 @@ class Controls(tk.Frame):
 
 
         self.dataTEST = bytearray(b'\x30' + b'0' + b'\xAA' + b'A' + b'\xFF' + b'\x32' + b'\x35' + b'\x35' + b'C' + b'o' + b'p' + b'y' + b'\r')
-        print("self.dataTest is: ")
+        print("self.dataTest: ")
         print(self.dataTEST)
 
 
