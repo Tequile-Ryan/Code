@@ -34,12 +34,6 @@ class Controls(tk.Frame):
         self.filename = ""  # initialize filename
         self.protocol = "0000000000"
 
-
-        self.dataTEST = bytearray(b'\x30' + b'0' + b'\xAA' + b'A' + b'\xFF' + b'\x32' + b'\x35' + b'\x35' + b'C' + b'o' + b'p' + b'y' + b'\r')
-        print("self.dataTest: ")
-        print(self.dataTEST)
-
-
     def create_btns_frame(self):
         # Define button font
         button_font = ("Berlin Sans FB Demi", 25)
@@ -50,9 +44,6 @@ class Controls(tk.Frame):
         bg_colour = "light blue"
         repeatBtnWidth = 20
         repeatEntryWidth = 5
-
-        self.dataTEST = bytearray(b'\x30' + b'0' + b'\xAA' + b'A' + b'\xFF' + b'\x32' + b'\x35' + b'\x35' + b'C' + b'o' + b'p' + b'y' + b'\r')
-        print(self.dataTEST)
 
         # Frame all the components on the left of the main
         # screen will be situated in
@@ -121,12 +112,14 @@ class Controls(tk.Frame):
         savedBrightness = self.protocol[:2]
         initialDelay = self.initialDelayEntry.get()
         repeatDelay = self.repeatRateEntry.get()
-	
+        """initialDelay = f"{int(initialDelay):04}"
+        repeatDelay = f"{int(repeatDelay):04}" """
+
         # Check if the length of the initial repeat delay is less than 4
         if len(initialDelay) < 4:	
             # Calculate the number of zeros needed to make the stored value of length 4 for the protocol	
             zeros_needed = 4 - len(initialDelay)
-		    # Add the zeros in front of the number
+            # Add the zeros in front of the number
             initialDelay = "0" * zeros_needed + initialDelay
         
         if len(repeatDelay) < 4:		
@@ -134,7 +127,32 @@ class Controls(tk.Frame):
             zeros_needed = 4 - len(repeatDelay)
             # Add the zeros in front of the number
             repeatDelay = "0" * zeros_needed + repeatDelay
-    
+
+        try:
+            f = open(self.filename, 'r')
+            self.jsonData = json.load(f)
+            f.close()
+            self.data = self.jsonData
+            if "initial delay: " in self.data:
+                del self.data["initial delay: "]
+            self.data["initial delay: "] = initialDelay
+            if "repeat delay: " in self.data:
+                del self.data["repeat delay: "]
+            self.data["repeat delay: "] = repeatDelay
+            self.jsonData = json.dumps(self.data, indent=4)
+            self.dataInHid = MacroToHid.create_data(self.data)
+            f = open(self.filename, 'w')
+            f.write(f"{self.jsonData}")
+            f.close()
+        except FileNotFoundError:
+            if "initial delay: " in self.data:
+                del self.data["initial delay: "]
+            self.data["initial delay: "] = initialDelay
+            if "repeat delay: " in self.data:
+                del self.data["repeat delay: "]
+            self.data["repeat delay: "] = repeatDelay
+            self.jsonData = json.dumps(self.data, indent=4)
+            self.dataInHid = MacroToHid.create_data(self.data)
         self.protocol = savedBrightness + initialDelay + repeatDelay
         print(self.protocol)
 
@@ -345,6 +363,7 @@ class Controls(tk.Frame):
             f = open(self.filename, 'r')
             self.data = json.load(f)
             f.close()
+        self.dataInHid = MacroToHid.create_data(self.data)
         print(self.data)
         if f"macro {num}" in self.data:
             # notice that here self.colour is a tuple, but after converting into json, it will be an array
@@ -492,6 +511,8 @@ class Controls(tk.Frame):
         }
         # Though there's no file, jsonData will be saved before GUI is closed
         self.jsonData = json.dumps(self.data, indent=4)
+        self.dataInHid = MacroToHid.create_data(self.data)
+        print(self.dataInHid)
         print(self.jsonData)
         if self.filename != "":
             f = open(self.filename, 'w')
@@ -522,14 +543,18 @@ class Controls(tk.Frame):
             self.data = self.jsonData
             if "brightness: " in self.data:
                 del self.data["brightness: "]
-            self.data["brightness: "] = level
+            self.data["brightness: "] = protLevel
             self.jsonData = json.dumps(self.data, indent=4)
-            if self.filename != "":
-                f = open(self.filename, 'w')
-                f.write(f"{self.jsonData}")
-                f.close()
+            self.dataInHid = MacroToHid.create_data(self.data)
+            f = open(self.filename, 'w')
+            f.write(f"{self.jsonData}")
+            f.close()
         except FileNotFoundError:
-            print("no file")
+            if "brightness: " in self.data:
+                del self.data["brightness: "]
+            self.data["brightness: "] = protLevel
+            self.jsonData = json.dumps(self.data, indent=4)
+            self.dataInHid = MacroToHid.create_data(self.data)
 
     # Create a function to handle button click events
     def button_click(self, row, col):
@@ -747,10 +772,11 @@ class Controls(tk.Frame):
     # 2 shouldn't allow to record two up action repeatedly
     # 3 try to return 0 after close during record
     # 4 scrolling the tex area
-    # 5 make a default colour
+    # 5 make a default data like if i haven't enter repeat delay, it should be the default value
     # 6 synchronize the label after pressing create
     # 7 make a new line when the macro name is too long
     # 8 after stopping record, just close keyboard
+    # 9 set the maximum number of repeat delay and initial delay
 
 class GameApp(object):
 
