@@ -776,7 +776,7 @@ class Controls(tk.Frame):
     # 6 synchronize the label after pressing create
     # 7 make a new line when the macro name is too long
     # 8 after stopping record, just close keyboard
-    # 9 set the maximum number of repeat delay and initial delay.
+    # 9 set the maximum number of repeat delay and initial delay
 
 class GameApp(object):
 
