@@ -17,7 +17,7 @@ from functools import partial
 import MacroToHid
 import KeyboardLayout
 import copy
-import Protocol
+
 
 
 class Controls(tk.Frame):
@@ -26,16 +26,26 @@ class Controls(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
 
+        self.dataInitialize()
+        self.jsonData = json.dumps(self.data,indent=4)
         self.selectedPort = None
         self.parent = parent
         self.create_btns_frame()
         self.create_new_macro_frame()
         self.parent.title("2800 Team Project")
         self.ListPortsInitially()
-        self.data = {}  # initialize jsonData
         self.filename = ""  # initialize filename
-        #self.protocol = "0000000000"
-        self.protocol = bytearray(b'\xff') * 545
+        self.protocol = "0000000000"
+
+    def dataInitialize(self):
+        self.data = {}
+        self.data["initial delay"] = "0500"
+        self.data["repeat delay"] = "0100"
+        self.data["brightness"] = "00"
+        for num in range(1,11):
+            self.data[f"macro {num}"] = {"macro name": f"macro {num}",
+                                         "macro": [""],
+                                         "colour": [0,0,0]}
 
     def create_btns_frame(self):
         # Define button font
@@ -77,7 +87,9 @@ class Controls(tk.Frame):
                                           validatecommand=(self.initialDelayLenCheck, "%P"),
                                           font=other_button_font,
                                           width=repeatEntryWidth)
+        self.initialDelayEntry.bind("<Return>", lambda event: self.enterRepeat())
         self.initialDelayEntry.pack(side=tk.LEFT, expand=True, anchor=tk.SW)
+        self.initialDelayEntry.insert(0, str(int(self.data["initial delay"])))
         self.repeatRateLabel = tk.Label(self.repeatFrame2, text="Repeat Rate: ",
 
                                         bg=bg_colour,
@@ -89,7 +101,14 @@ class Controls(tk.Frame):
                                         validatecommand=(self.repeatRateLenCheck, "%P"),
                                         font=other_button_font,
                                         width=repeatEntryWidth)
+        self.repeatRateEntry.bind("<Return>", lambda event: self.enterRepeat())
         self.repeatRateEntry.pack(side=tk.LEFT, expand=True, anchor=tk.W)
+        self.delayErrorLabel = tk.Label(self.repeatFrame, text="",
+                                        bg=bg_colour,
+                                        font=other_button_font,
+                                        fg="#ff0000")
+        self.delayErrorLabel.pack(anchor=tk.S)
+        self.repeatRateEntry.insert(0, str(int(self.data["repeat delay"])))
         self.repeatEnterBtn = tk.Button(self.repeatFrame, text="Enter",
                                         command=self.enterRepeat,
                                         font=enter_btn_font)
@@ -105,95 +124,75 @@ class Controls(tk.Frame):
         brightnessFrame.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
         brightnessFrame.config(bg="light blue")
         self.btnsFrame.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
-
+        self.brightnessValueLabel = tk.Label(brightnessFrame, text=str(int(self.data["brightness"])),
+                                             width=self.BUTTON_WIDTH,
+                                             bg=bg_colour,
+                                             font=button_font,
+                                             fg=button_fg_color)
+        self.brightnessValueLabel.pack(expand=True, anchor=tk.S)
         # Create a Scale widget
         self.slider = tk.Scale(brightnessFrame, command=self.saveBrightness,
                                from_=0,
                                to=11,
                                orient="horizontal",
                                length=300)
+        self.slider.set(int(self.data["brightness"]))
         self.slider.pack(expand=True, side=tk.TOP, anchor=tk.N)
 
     def enterRepeat(self):
-        #savedBrightness = self.protocol[:2]
-
+        savedBrightness = self.protocol[:2]
         initialDelay = self.initialDelayEntry.get()
         repeatDelay = self.repeatRateEntry.get()
-        """initialDelay = f"{int(initialDelay):04}"
-        repeatDelay = f"{int(repeatDelay):04}" """
+        if (not initialDelay.isdigit() or not repeatDelay.isdigit()) and initialDelay != "":
+            self.delayErrorLabel.config(text="Please enter only number")
+        elif initialDelay == "" or int(initialDelay) <= 50 or int(repeatDelay) <= 50:
+            self.delayErrorLabel.config(text="The minimum time period is 51(ms)")
+        else:
+            """initialDelay = f"{int(initialDelay):04}"
+            repeatDelay = f"{int(repeatDelay):04}" """
+            self.delayErrorLabel.config(text="")
+            # Check if the length of the initial repeat delay is less than 4
+            if len(initialDelay) < 4:
+                # Calculate the number of zeros needed to make the stored value of length 4 for the protocol
+                zeros_needed = 4 - len(initialDelay)
+                # Add the zeros in front of the number
+                initialDelay = "0" * zeros_needed + initialDelay
 
-        # Check if the length of the initial repeat delay is less than 4
-        if len(initialDelay) < 4:
-            # Calculate the number of zeros needed to make the stored value of length 4 for the protocol
-            zeros_needed = 4 - len(initialDelay)
-            # Add the zeros in front of the number
-            initialDelay = "0" * zeros_needed + initialDelay
+            if len(repeatDelay) < 4:
+                # Calculate the number of zeros needed to make the stored value of length 4 for the protocol
+                zeros_needed = 4 - len(repeatDelay)
+                # Add the zeros in front of the number
+                repeatDelay = "0" * zeros_needed + repeatDelay
 
-        if len(repeatDelay) < 4:
-            # Calculate the number of zeros needed to make the stored value of length 4 for the protocol
-            zeros_needed = 4 - len(repeatDelay)
-            # Add the zeros in front of the number
-            repeatDelay = "0" * zeros_needed + repeatDelay
-
-        try:
-            f = open(self.filename, 'r')
-            self.jsonData = json.load(f)
-            f.close()
-            self.data = self.jsonData
-            if "initial delay: " in self.data:
-                del self.data["initial delay: "]
-            self.data["initial delay: "] = initialDelay
-            if "repeat delay: " in self.data:
-                del self.data["repeat delay: "]
-            self.data["repeat delay: "] = repeatDelay
-            self.jsonData = json.dumps(self.data, indent=4)
-            CopyD = copy.deepcopy(self.data)
-            self.dataInHid = MacroToHid.create_data(CopyD)
-            f = open(self.filename, 'w')
-            f.write(f"{self.jsonData}")
-            f.close()
-        except FileNotFoundError:
-            if "initial delay: " in self.data:
-                del self.data["initial delay: "]
-            self.data["initial delay: "] = initialDelay
-            if "repeat delay: " in self.data:
-                del self.data["repeat delay: "]
-            self.data["repeat delay: "] = repeatDelay
-            self.jsonData = json.dumps(self.data, indent=4)
-            CopyD = copy.deepcopy(self.data)
-            self.dataInHid = MacroToHid.create_data(CopyD)
-        #self.protocol = savedBrightness + str(initialDelay).encode() + bytearray(repeatDelay)
-        
-        print("Initial delay is: " + str(initialDelay))
-        print("Repeat delay is: " + str(repeatDelay))
-
-        # index position 1 of protocol to be the hex value of
-        # the first two digits of the initial delay.
-        self.protocol[1:2] = bytearray.fromhex(str(initialDelay[0:2]))
-        print(self.protocol[1:2])
-
-        
-
-        # index position 2 of protocol to be the hex value of
-        # the last two digits of the initial delay.
-        self.protocol[2:3] = bytearray.fromhex(str(initialDelay[2:4]))
-        print(self.protocol[2:3])
-
-        # Same logic as for intial delay
-        self.protocol[3:4] = bytearray.fromhex(str(repeatDelay[0:2]))
-        #print("Using repeat delay of :" + str(repeatDelay[0:2]) + )
-        print(self.protocol[3:4])
-        self.protocol[4:5] = bytearray.fromhex(str(repeatDelay[2:4]))
-        print(self.protocol[4:5])
-
-        print("\n Data in HID is: ")
-        print(self.dataInHid)
-        self.protocol = Protocol.createProtocol(self.protocol, self.dataInHid)
-
-        print("PROTOCOL IS: ")
-        print(self.protocol)
-        print("Length of protocol is: ")
-        print(len(self.protocol))
+            try:
+                f = open(self.filename, 'r')
+                self.jsonData = json.load(f)
+                f.close()
+                self.data = self.jsonData
+                if "initial delay" in self.data:
+                    del self.data["initial delay"]
+                self.data["initial delay: "] = initialDelay
+                if "repeat delay" in self.data:
+                    del self.data["repeat delay"]
+                self.data["repeat delay"] = repeatDelay
+                self.jsonData = json.dumps(self.data, indent=4)
+                CopyD = copy.deepcopy(self.data)
+                self.dataInHid = MacroToHid.create_data(CopyD)
+                f = open(self.filename, 'w')
+                f.write(f"{self.jsonData}")
+                f.close()
+            except FileNotFoundError:
+                if "initial delay" in self.data:
+                    del self.data["initial delay"]
+                self.data["initial delay"] = initialDelay
+                if "repeat delay: " in self.data:
+                    del self.data["repeat delay"]
+                self.data["repeat delay"] = repeatDelay
+                self.jsonData = json.dumps(self.data, indent=4)
+                CopyD = copy.deepcopy(self.data)
+                self.dataInHid = MacroToHid.create_data(CopyD)
+            self.protocol = savedBrightness + initialDelay + repeatDelay
+            print(self.protocol)
 
     def create_new_macro_frame(self):
         BUTTON_WIDTH = 13
@@ -251,19 +250,29 @@ class Controls(tk.Frame):
         buttons = []
         self.keys = {}
         count = 0
-        for row in range(4):
+        for row in range(3):
             button_row = []
-            for col in range(3):
+            for col in range(4):
                 count += 1
-                button = tk.Button(self.keyboardFrame, text=str(count),
-                                   font=keyFont,
-                                   command=partial(self.keyPress, count),
-                                   width=KEY_WIDTH,
-                                   height=1,
-                                   bg="white")
-                button.grid(row=row, column=col, padx=5, pady=5)
-                button_row.append(button)
-                self.keys[count] = button
+                if row == 2 and (col == 2 or col == 3):
+                    button = tk.Button(self.keyboardFrame,
+                                       font=keyFont,
+                                       width=KEY_WIDTH,
+                                       height=1,
+                                       bg="white")
+                    button.grid(row=row, column=col, padx=5, pady=5)
+                    button_row.append(button)
+                    self.keys[count] = button
+                else:
+                    button = tk.Button(self.keyboardFrame, text=str(count),
+                                       font=keyFont,
+                                       command=partial(self.keyPress, count),
+                                       width=KEY_WIDTH,
+                                       height=1,
+                                       bg="white")
+                    button.grid(row=row, column=col, padx=5, pady=5)
+                    button_row.append(button)
+                    self.keys[count] = button
             buttons.append(button_row)
 
         # Frame to hold port functionality
@@ -310,6 +319,7 @@ class Controls(tk.Frame):
         KEY_WIDTH = 5
         label_font = ("Berlin Sans FB Demi", 20)
         button_font = ("Berlin Sans FB Demi", 30)
+        small_button_font = ("Berlin Sans FB Demi", 17)
         button_fg_color = "white"
         bg_colour = "light blue"
         keyFont = ("Berlin Sans FB Demi", 20)
@@ -324,14 +334,14 @@ class Controls(tk.Frame):
         previousLabel = tk.Label(previousFrame, text="Previous Macro Configuration", font=label_font)
         previousLabel.pack()
 
-        macroNameLabel = tk.Label(previousFrame, text="Macro Name: ", font=label_font)
-        macroNameLabel.pack()
+        self.macroNameLabel = tk.Label(previousFrame, text="Macro Name: ", font=label_font, wraplength=600)
+        self.macroNameLabel.pack()
 
         macroSequenceLabel = tk.Label(previousFrame, text="Macro Sequence: ", font=label_font)
         macroSequenceLabel.pack()
 
         self.text_area = st.ScrolledText(previousFrame,
-                                         width=30,
+                                         width=40,
                                          height=8,
                                          font=("Times New Roman",
                                                15))
@@ -347,51 +357,63 @@ class Controls(tk.Frame):
         self.text_area.insert(tk.INSERT, actions)
         self.text_area.configure(state='disabled')
 
-        RGBColourLabel = tk.Label(previousFrame, text="Colour: ", font=label_font)
-        RGBColourLabel.pack()
+        self.RGBColourLabel = tk.Label(previousFrame, text="Colour: ", font=label_font)
+        self.RGBColourLabel.pack()
 
         userFrame = tk.Frame(self.parent)
         userFrame.pack(side=tk.LEFT, expand=True)
 
         # Frame for entry labels
-        labelFrame = tk.Frame(userFrame)
-        labelFrame.pack(side=tk.LEFT, anchor=tk.S, expand=True)
-        MacroNameLabel = tk.Label(labelFrame, text="Macro Name: ", font=label_font)
-        MacroNameLabel.pack()
-        MacroSeqLabel = tk.Label(labelFrame, text="Macro Sequence: ", font=label_font)
-        MacroSeqLabel.pack()
-        RGBLabel = tk.Label(labelFrame, text="Colour: ", font=label_font)
-        RGBLabel.pack()
+        macroNameFrame = tk.Frame(userFrame)
+        macroNameFrame.pack(side=tk.TOP, anchor=tk.W, expand=True)
+        errorFrame = tk.Frame(userFrame)
+        errorFrame.pack(side=tk.TOP, anchor=tk.W, expand=True)
+        macroFrame = tk.Frame(userFrame)
+        macroFrame.pack(side=tk.TOP, anchor=tk.W, expand=True)
+        colourFrame = tk.Frame(userFrame)
+        colourFrame.pack(side=tk.TOP, anchor=tk.W, expand=True)
+
+        self.MacroNameLabel = tk.Label(macroNameFrame, text="Macro Name: ", font=label_font)
+        self.MacroNameLabel.pack(side=tk.LEFT)
+        MacroSeqLabel = tk.Label(macroFrame, text="Macro Sequence:            ", font=label_font)
+        MacroSeqLabel.pack(side=tk.LEFT,pady=20)
+        RGBLabel = tk.Label(colourFrame, text="Colour:                                  ", font=label_font)
+        RGBLabel.pack(side=tk.LEFT)
 
         # initialize macro
         self.macro = []
         # Frame for entry widgets
-        EntryFrame = tk.Frame(userFrame)
-        EntryFrame.pack(side=tk.LEFT, anchor=tk.S, expand=True)
         self.macroNameLenCheck = self.register(self.NameLenCheck)
-        self.macroNameEntry = tk.Entry(EntryFrame, validate="key", validatecommand=(self.macroNameLenCheck, "%P"),
+        self.macroNameEntry = tk.Entry(macroNameFrame, validate="key", validatecommand=(self.macroNameLenCheck, "%P"),
                                        font=label_font)
+        self.macroNameEntry.bind("<Return>", lambda n=num: self.macroCreate(n))
         self.macroNameEntry.pack()
-        macroEditBtnFrame = tk.Frame(EntryFrame)
+        self.macroNameErrorLabel = tk.Label(errorFrame, text="                              ",
+                                            font=small_button_font,
+                                            fg="#ff0000")
+        self.macroNameErrorLabel.pack(side=tk.TOP)
+        macroEditBtnFrame = tk.Frame(macroFrame)
         macroEditBtnFrame.pack(side=tk.TOP, anchor=tk.S, expand=True)
-        MacroRecordBtn = tk.Button(macroEditBtnFrame, text="Record macro",
-                                   command=self.keyRecordTread,
-                                   font=button_font,
+        MacroRecordBtn = tk.Button(macroEditBtnFrame, width=BUTTON_WIDTH,
+                                   text="Record macro",
+                                   command=lambda n=num: self.keyRecordTread(n),
+                                   font=small_button_font,
                                    bg=bg_colour,
                                    fg=button_fg_color)
         MacroRecordBtn.pack()
-        MacroRecordBtn = tk.Button(macroEditBtnFrame, text="Stop recording",
-                                   command=self.stopRecording,
-                                   font=button_font,
-                                   bg=bg_colour,
-                                   fg=button_fg_color)
-        MacroRecordBtn.pack()
+        StopBtn = tk.Button(macroEditBtnFrame, width=BUTTON_WIDTH,
+                            text="Stop recording",
+                            command=self.stopRecording,
+                            font=small_button_font,
+                            bg=bg_colour,
+                            fg=button_fg_color)
+        StopBtn.pack()
 
-        self.RGBChooseBtn = tk.Button(EntryFrame, width=self.BUTTON_WIDTH,
+        self.RGBChooseBtn = tk.Button(colourFrame, width=self.BUTTON_WIDTH,
                                       bg="white",
                                       command=lambda: self.ChooseColour(num),
                                       pady=9)
-        self.RGBChooseBtn.pack()
+        self.RGBChooseBtn.pack(pady=60)
 
         ''' initialize data
             if the file has been opened, data will be read from the file
@@ -406,22 +428,23 @@ class Controls(tk.Frame):
         print(self.data)
         if f"macro {num}" in self.data:
             # notice that here self.colour is a tuple, but after converting into json, it will be an array
-            self.colour = self.data[f"macro {num}"]["colour"]
+            self.colour = tuple(self.data[f"macro {num}"]["colour"])
             self.macroName = self.data[f"macro {num}"]["macro name"]
             self.macro = self.data[f"macro {num}"]["macro"]
-            self.macroNameEntry.insert(0, self.macroName)
+            if self.macroNameEntry.get() == "":
+                self.macroNameEntry.insert(0, self.macroName)
             self.colourHex = f"#{self.colour[0]:02X}{self.colour[1]:02X}{self.colour[2]:02X}"
             self.RGBChooseBtn.configure(bg=self.colourHex)
-            macroNameLabel.config(text="Macro Name: " + self.macroName)
-            RGBColourLabel.config(text="Colour: " + f"{self.colour}")
+            self.macroNameLabel.config(text="Macro Name: " + self.macroName)
+            self.RGBColourLabel.config(text="Colour: " + f"{self.colour}")
             self.updateAction()
 
         # Create macro button
-        createMacroBtn = tk.Button(EntryFrame, text="Create Macro",
+        createMacroBtn = tk.Button(userFrame, text="Create Macro",
                                    command=partial(self.macroCreate, num),
                                    font=button_font,
                                    bg=bg_colour,
-                                   fg=button_fg_color)
+                                   fg=button_fg_color,)
         createMacroBtn.pack(side=tk.BOTTOM)
 
     # Check if the length of macro name more than 30 chars
@@ -438,12 +461,12 @@ class Controls(tk.Frame):
             return False
 
     # make a thread to avoid interrupting by the keyboard module
-    def keyRecordTread(self):
+    def keyRecordTread(self,num):
         self.is_recording = True
         self.macro = []
-        self.recording_thread = threading.Thread(target=self.keyRecord)
+        self.recording_thread = threading.Thread(target=lambda n=num: self.keyRecord(n))
         self.recording_thread.start()
-        self.createKeyboard()
+        self.createKeyboard(num)
 
     ''' the main loop of key recording:
         keyboard.read_event() is to get the action and when this function works, the program will wait for it to run.
@@ -460,7 +483,7 @@ class Controls(tk.Frame):
         the current loop).)
     '''
 
-    def keyRecord(self):
+    def keyRecord(self,num):
         while self.is_recording:
             # when recording, macro name can't be written
             self.macroNameEntry.config(state="disabled")
@@ -474,6 +497,7 @@ class Controls(tk.Frame):
             self.macroNumLimit()
         self.macroNameEntry.config(state="normal")
         self.checkReleasing()
+        self.macroCreate(num)
 
     def checkReleasing(self):
         """for i in range(0, len(self.macro)):
@@ -487,7 +511,14 @@ class Controls(tk.Frame):
                 if not isReleased:
                     self.macro.append(f"{eventName} up")
                     self.updateAction() """
-        for i,act in enumerate(self.macro):
+        release_all_position = len(self.macro) - 1
+        while release_all_position >= 0:
+            if self.macro[release_all_position] == "release all":
+                release_all_position += 1
+                break
+            release_all_position -= 1
+        # if release_all_position < len(self.macro):
+        for i in range(release_all_position,len(self.macro)):
             downPosition = self.macro[i].rfind("down")
             if downPosition != -1:
                 eventName = self.macro[i][0: downPosition - 1]
@@ -511,26 +542,45 @@ class Controls(tk.Frame):
         self.repeat = False
         self.isPressed = False
         for i in range(0, len(self.macro)):
-            downPosition = self.macro[i].rfind("down")
-            if downPosition != -1:
+            if self.macro[i].endswith("down"):
+                downPosition = self.macro[i].rfind("down")
                 eventName = self.macro[i][0: downPosition - 1]
                 isReleased = False
                 for j in range(i, len(self.macro)):
-                    if eventName in self.macro[j] and self.macro[j].endswith("up"):
+                    if eventName in self.macro[j] and self.macro[j].endswith("up") or self.macro[j] == "release all":
                         isReleased = True
                     elif f"{eventName} up" == self.act:
                         self.isPressed = True
                 if not isReleased and self.macro[i] == self.act:
                     self.repeat = True
+            if self.macro[i].endswith("up"):
+                upPosition = self.macro[i].rfind("up")
+                eventName = self.macro[i][0:upPosition - 1]
+                isHolding = False
+                for j in range(i, len(self.macro)):
+                    if eventName in self.macro[j] and self.macro[j].endswith("down"):
+                        isHolding = True
+                if not isHolding and self.macro[i] == self.act:
+                    self.repeat = True
         if self.act.endswith("down"):
             self.isPressed = True
+        if self.act == "release all":
+            self.isPressed = True  # This is an special condition
         # check how many keys are pressed in the same time
         numPressed = 0
         numReleased = 0
-        for i in range(0, len(self.macro)):
+        releasePosition = 0
+        releasePositionCheck = len(self.macro) - 1
+        while releasePositionCheck >= 0:
+            if self.macro[releasePositionCheck] == "release all":
+                releasePosition = releasePositionCheck + 1
+                break
+            releasePositionCheck = releasePositionCheck - 1
+        print(f"release: {releasePosition}")
+        for i in range(releasePosition, len(self.macro)):
             if self.macro[i].endswith("down"):
                 numPressed += 1
-        for i in range(0, len(self.macro)):
+        for i in range(releasePosition, len(self.macro)):
             if self.macro[i].endswith("up"):
                 numReleased += 1
         if self.act.endswith("up"):
@@ -543,53 +593,71 @@ class Controls(tk.Frame):
         self.text_area.config(state="normal")
         self.text_area.delete(1.0, tk.END)
         actions = ""
-        for i in range(1, len(self.macro) + 1):
-            if i <= 21:
-                action = "\taction " + str(i) + ": " + self.macro[i - 1]
-                print(action)
-                actions += action + "\n"
-            else:
-                action = "\t           " + self.macro[i - 1]
-                print(action)
-                actions += action + "\n"
+        if self.macro != [""]:
+            for i in range(1, len(self.macro) + 1):
+                if i <= 21:
+                    print(f"macro: {self.macro[i-1]}")
+                    action = "\taction " + str(i) + ": " + self.macro[i - 1]
+                    print(action)
+                    actions += action + "\n"
+                else:
+                    action = "\t           " + self.macro[i - 1]
+                    print(action)
+                    actions += action + "\n"
         self.text_area.insert(tk.END, actions)
+        self.text_area.yview_moveto(1.0)
         self.text_area.config(state="disabled")
 
     def macroCreate(self, num: any):
         self.macroName = self.macroNameEntry.get()
-        self.macros = self.macro
-        if f"macro {num}" in self.data:
-            del self.data[f"macro {num}"]
-        self.data[f"macro {num}"] = {
-            "macro name": self.macroName,
-            "colour": self.colour,
-            "macro": self.macros
-        }
-        # Though there's no file, jsonData will be saved before GUI is closed
-        self.jsonData = json.dumps(self.data, indent=4)
-        DataCopy = copy.deepcopy(self.data)
-        print(self.data)
-        self.dataInHid = MacroToHid.create_data(DataCopy)
-        print(f"data: {self.data}")
-        print("THIS IS NEEDED FOR THE PROTOCOL:")
-        print(self.dataInHid)
-        print("Type of data:")
-        print(type(self.dataInHid))
-        print(self.jsonData)
-        self.protocol = Protocol.createProtocol(self.protocol, self.dataInHid)
-        print("THE PROTOCOL IS: ")
-        print(self.protocol)
-        if self.filename != "":
-            f = open(self.filename, 'w')
-            f.write(f"{self.jsonData}")
-            f.close()
+        includeUsChar = True
+        for i,char in enumerate(self.macroName):
+            print(ord(char))
+            if ord(char) < 32 or ord(char) > 126:
+                includeUsChar = False
+                break
+        print(includeUsChar)
+        if len(self.macroName) == 0:
+            self.macroNameErrorLabel.config(text="Macro name must be between 1 and 30 characters")
+        elif includeUsChar == False:
+            self.macroNameErrorLabel.config(text="Macro name must be characters in US keyboard")
+        else:
+            self.macroNameErrorLabel.config(text="")
+            self.macros = self.macro
+            if f"macro {num}" in self.data:
+                del self.data[f"macro {num}"]
+            self.data[f"macro {num}"] = {"macro name": self.macroName,
+                                         "colour": list(self.colour),
+                                         "macro": self.macros}
+            # Though there's no file, jsonData will be saved before GUI is closed
+            self.jsonData = json.dumps(self.data, indent=4)
+            DataCopy = copy.deepcopy(self.data)
+            print(self.data)
+            self.dataInHid = MacroToHid.create_data(DataCopy)
+            print(f"data: {self.data}")
+            print(self.dataInHid)
+            print(self.jsonData)
+            self.colour = tuple(self.data[f"macro {num}"]["colour"])
+            self.macroName = self.data[f"macro {num}"]["macro name"]
+            self.macro = self.data[f"macro {num}"]["macro"]
+            self.colourHex = f"#{self.colour[0]:02X}{self.colour[1]:02X}{self.colour[2]:02X}"
+            self.RGBChooseBtn.configure(bg=self.colourHex)
+            self.macroNameLabel.config(text="Macro Name: " + self.macroName)
+            self.RGBColourLabel.config(text="Colour: " + f"{self.colour}")
+            if self.filename != "":
+                f = open(self.filename, 'w')
+                f.write(f"{self.jsonData}")
+                f.close()
 
     def stopRecording(self):
         self.is_recording = False
         pyautogui.press('esc')
+        if self.virtualKeyboard:
+            self.virtualKeyboard.destroy()
 
     def saveBrightness(self, level):
         protLevel = level
+        value = int(level)
 
         if len(protLevel) < 2:
             # Calculate the number of zeros needed to make the stored value of length 2 for the protocol
@@ -597,23 +665,22 @@ class Controls(tk.Frame):
             # Add the zeros in front of the number
             protLevel = "0" * zeros_needed + str(protLevel)
 
-        #repeatData = self.protocol[2:10]
-        #self.protocol = str(protLevel) + repeatData
-
-        self.protocol[0:1] = bytearray.fromhex(str(protLevel))
-
-        self.protocol = Protocol.createProtocol(self.protocol, self.dataInHid)
-        
+        repeatData = self.protocol[2:10]
+        self.protocol = str(protLevel) + repeatData
         print(self.protocol)
 
+        if value == 11:
+            self.brightnessValueLabel.configure(text="AUTO")
+        else:
+            self.brightnessValueLabel.configure(text=str(value))
         try:
             f = open(self.filename, 'r')
             self.jsonData = json.load(f)
             f.close()
             self.data = self.jsonData
-            if "brightness: " in self.data:
-                del self.data["brightness: "]
-            self.data["brightness: "] = protLevel
+            if "brightness" in self.data:
+                del self.data["brightness"]
+            self.data["brightness"] = protLevel
             self.jsonData = json.dumps(self.data, indent=4)
             CopyD = copy.deepcopy(self.data)
             self.dataInHid = MacroToHid.create_data(CopyD)
@@ -621,9 +688,9 @@ class Controls(tk.Frame):
             f.write(f"{self.jsonData}")
             f.close()
         except FileNotFoundError:
-            if "brightness: " in self.data:
-                del self.data["brightness: "]
-            self.data["brightness: "] = protLevel
+            if "brightness" in self.data:
+                del self.data["brightness"]
+            self.data["brightness"] = protLevel
             self.jsonData = json.dumps(self.data, indent=4)
             CopyD = copy.deepcopy(self.data)
             self.dataInHid = MacroToHid.create_data(CopyD)
@@ -643,6 +710,17 @@ class Controls(tk.Frame):
 
     def fileRead(self):
         self.filename = askopenfilename()
+        self.initialDelayEntry.delete(0,"end")
+        self.repeatRateEntry.delete(0,"end")
+        if self.filename != "":
+            f = open(self.filename, 'r')
+            d = json.load(f)
+            f.close()
+        else:
+            d = copy.deepcopy(self.data)
+        self.initialDelayEntry.insert(0,d["initial delay"])
+        self.repeatRateEntry.insert(0,d["repeat delay"])
+        self.slider.set(int(d["brightness"]))
         print(self.filename)
         print("File Read")
 
@@ -676,28 +754,20 @@ class Controls(tk.Frame):
         data += "\r"
         print("BEFORE SENDING: " + data)
 
-        #self.protocol += "\n\r"
-        self.protocol = Protocol.createProtocol(self.protocol, self.dataInHid)
-        print("SELF.DATAINHID")
-        print(self.dataInHid)
-        #str = "Hello\n\r"
-        #self.serialSet.write(str.encode())
-        # self.serialSet.write(self.protocol.encode())
-        self.serialSet.write(self.protocol)
-        # self.serialSet.write(self.protocol)
+        self.protocol += "\n\r"
 
+        # str = "Hello"
+        self.serialSet.write(self.protocol.encode())
         # print("Read pressed for macro:", macroName, "Brightness level:", brightnessLevel)
         print(self.serialSet.in_waiting)
-        time.sleep(1)
+
         try:
-            data_bytes = self.serialSet.read(1100)  # Read data as bytes
+            data_bytes = self.serialSet.readline()  # Read data as bytes
             print("DATA BYTES ARE:")
             print(data_bytes)
-            print(len(data_bytes))
             if data_bytes:
-                print()
-                #new_text = data_bytes.decode('utf-8', errors='replace')  # Decode as UTF-8
-                #print("DATA RECEIVED: " + new_text)
+                new_text = data_bytes.decode('utf-8', errors='replace')  # Decode as UTF-8
+                print("DATA RECEIVED: " + new_text)
             else:
                 print("No data received from the serial port.")
         except UnicodeDecodeError as e:
@@ -765,6 +835,7 @@ class Controls(tk.Frame):
             self.RGBChooseBtn.configure(bg=f"{self.colorCode[1]}")
         print(num)
         self.colour = self.colorCode[0]
+        self.macroCreate(num)
 
     def chooseColour(self, number):
         color_code = colorchooser.askcolor(title="Choose color")
@@ -804,12 +875,13 @@ class Controls(tk.Frame):
         for widgets in self.parent.winfo_children():
             widgets.destroy()
 
-    def createKeyboard(self):
+    def createKeyboard(self,num):
         self.keyBtn = []  # initialize keyBtn
         self.keyState = []
         self.virtualKeyboard = tk.Toplevel(self.parent)
         self.virtualKeyboard.title("Virtual Keyboard")
         self.virtualKeyboard.geometry("1338x405")
+        self.virtualKeyboard.geometry("+500+500")
         self.virtualKeyboard.resizable(False, False)  # not allow users to adjust the window size
         for row in range(len(KeyboardLayout.text)):
             self.keyBtn.append([])  # initialize keyBtn[row]
@@ -820,25 +892,29 @@ class Controls(tk.Frame):
                                                   width=KeyboardLayout.width[row][col],
                                                   height=KeyboardLayout.height[row][col],
                                                   text=KeyboardLayout.text[row][col],
-                                                  command=lambda r=row, c=col: self.KeyboardAction(r, c),
+                                                  command=lambda r=row, c=col, n=num: self.KeyboardAction(r, c, n),
                                                   bg="#FFFFFF")
                                         )
                 self.keyBtn[row][col].place(x=KeyboardLayout.x[row][col], y=KeyboardLayout.y[row][col])
 
-    def KeyboardAction(self, row, col):
+    def KeyboardAction(self, row, col, num):
         self.keyState[row][col] = not self.keyState[row][col]
         if row == 5 and col == 12:
             self.keyboardAct = "release all"
+            for r in range(len(KeyboardLayout.text)):
+                for c in range(len(KeyboardLayout.text[row])):
+                    self.keyBtn[r][c].configure(bg="#FFFFFF")
+                    self.keyState[r][c] = False
         elif self.keyState[row][col]:
             self.keyboardAct = f"{KeyboardLayout.event[row][col]} down"
             self.keyBtn[row][col].configure(bg="#808080")  # set to gray stands for "hold pressing"
         else :
             self.keyboardAct = f"{KeyboardLayout.event[row][col]} up"
             self.keyBtn[row][col].configure(bg="#FFFFFF")  # set to white stands for "no pressing currently"
-        self.keyboardRecord()
+        self.keyboardRecord(num)
 
     # almost same as keyRecord function.
-    def keyboardRecord(self):
+    def keyboardRecord(self,num):
         if self.is_recording:
             self.act = self.keyboardAct
             self.macroPressLimit()
@@ -849,6 +925,7 @@ class Controls(tk.Frame):
             self.macroNumLimit()
         if not self.is_recording:
             self.checkReleasing()
+            self.macroCreate(num)
     # YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY!
     # Bugs to fix tmr: 1 sometimes the max press key number larger than 6 when using both real and virtual keyboard
     # 2 shouldn't allow to record two up action repeatedly
@@ -860,7 +937,8 @@ class Controls(tk.Frame):
     # 8 after stopping record, just close keyboard
     # 9 set the maximum number of repeat delay and initial delay
     # 10 avoid record button for twice without stop button 防止重复按记录按钮
-
+    # 11 the last action cannot come out until I press the stop button
+    # 12 if users change the file content to illegal one, the file should not be read
 
 class GameApp(object):
 

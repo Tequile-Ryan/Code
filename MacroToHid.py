@@ -155,7 +155,7 @@ HID_dictionary = {"release all": "00",
 # convert function allow to make the macro list into a Hid list
 def convert(ls):
     hid_ls = []
-    for index, action in enumerate(ls):
+    """for index, action in enumerate(ls):
         if action in HID_dictionary.keys():  # if there is a down action
             hid_ls.append(HID_dictionary.get(action))  # add the corresponding HID code to the list
             ascii_index = chr(index + 32)  # use the corresponding ascii char to decrease the bytes
@@ -169,7 +169,21 @@ def convert(ls):
                         hid_ls.append(ascii_up_index)
                         break
             else:
-                hid_ls.append(" ")
+                hid_ls.append(" ")"""
+
+    for action in ls:
+        if action in HID_dictionary.keys():
+            # decHID = int(HID_dictionary.get(action), 16)
+            # decHID = f"{decHID:03}"
+            HID = HID_dictionary.get(action)
+            hid_ls.append(HID)
+
+        else:
+            up_convert_into_down_action = action[:action.rfind("up")] + "down"
+            # decHID = int(HID_dictionary.get(up_convert_into_down_action), 16)
+            # decHID = f"{decHID:03}"
+            HID = HID_dictionary.get(up_convert_into_down_action)
+            hid_ls.append(HID)
     return hid_ls
 
 
