@@ -686,7 +686,7 @@ class Controls(tk.Frame):
         self.serialSet.write(self.protocol)
         # self.serialSet.write(self.protocol)
 
-        # print("Read pressed for macro:", macroName, "Brightness level:", brightnessLevel)
+        #h  print("Read pressed for macro:", macroName, "Brightness level:", brightnessLevel)
         print(self.serialSet.in_waiting)
         time.sleep(1)
         try:
