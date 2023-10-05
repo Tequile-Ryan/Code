@@ -162,29 +162,28 @@ class Controls(tk.Frame):
             self.jsonData = json.dumps(self.data, indent=4)
             CopyD = copy.deepcopy(self.data)
             self.dataInHid = MacroToHid.create_data(CopyD)
+
         #self.protocol = savedBrightness + str(initialDelay).encode() + bytearray(repeatDelay)
         
-        print("Initial delay is: " + str(initialDelay))
-        print("Repeat delay is: " + str(repeatDelay))
+        # print("Initial delay is: " + str(initialDelay))
+        # print("Repeat delay is: " + str(repeatDelay))
 
         # index position 1 of protocol to be the hex value of
         # the first two digits of the initial delay.
-        self.protocol[1:2] = bytearray.fromhex(str(initialDelay[0:2]))
-        print(self.protocol[1:2])
-
-        
+        # self.protocol[1:2] = bytearray.fromhex(str(initialDelay[0:2]))
+        # print(self.protocol[1:2])
 
         # index position 2 of protocol to be the hex value of
         # the last two digits of the initial delay.
-        self.protocol[2:3] = bytearray.fromhex(str(initialDelay[2:4]))
-        print(self.protocol[2:3])
+        # self.protocol[2:3] = bytearray.fromhex(str(initialDelay[2:4]))
+        # print(self.protocol[2:3])
 
         # Same logic as for intial delay
-        self.protocol[3:4] = bytearray.fromhex(str(repeatDelay[0:2]))
+        # self.protocol[3:4] = bytearray.fromhex(str(repeatDelay[0:2]))
         #print("Using repeat delay of :" + str(repeatDelay[0:2]) + )
-        print(self.protocol[3:4])
-        self.protocol[4:5] = bytearray.fromhex(str(repeatDelay[2:4]))
-        print(self.protocol[4:5])
+        # print(self.protocol[3:4])
+        # self.protocol[4:5] = bytearray.fromhex(str(repeatDelay[2:4]))
+        # print(self.protocol[4:5])
 
         print("\n Data in HID is: ")
         print(self.dataInHid)
@@ -597,10 +596,10 @@ class Controls(tk.Frame):
             # Add the zeros in front of the number
             protLevel = "0" * zeros_needed + str(protLevel)
 
-        #repeatData = self.protocol[2:10]
-        #self.protocol = str(protLevel) + repeatData
+        # repeatData = self.protocol[2:10]
+        # self.protocol = str(protLevel) + repeatData
 
-        self.protocol[0:1] = bytearray.fromhex(str(protLevel))
+        # self.protocol[0:1] = bytearray.fromhex(str(protLevel))
 
         self.protocol = Protocol.createProtocol(self.protocol, self.dataInHid)
         

@@ -1,7 +1,8 @@
 import copy
 
+
 HID_dictionary = {"release all": "00",
-                  "" : "ff",
+                  "": "ff",
                   "a down": "04",
                   "A down": "04",
                   "b down": "05",
